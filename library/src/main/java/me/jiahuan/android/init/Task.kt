@@ -34,7 +34,10 @@ class Task private constructor(
         Log.d(TAG, "$name task start")
         mCurrentStatus.set(STATUS_RUNNING)
         if (condition.invoke()) {
+            Log.d(TAG, "$name task doing")
             job.invoke()
+        } else {
+            Log.d(TAG, "$name task not meet the condition")
         }
         mCurrentStatus.set(STATUS_END)
         Log.d(TAG, "$name task end")
@@ -59,6 +62,7 @@ class Task private constructor(
         private var mTaskName: String = ""
         private var mJob: () -> Unit = {}
         private var mCondition: () -> Boolean = { false }
+        private var mNeedOnMainThread = false
 
         fun name(name: String): TaskBuilder {
             mTaskName = name
@@ -87,6 +91,12 @@ class Task private constructor(
         fun job(job: () -> Unit, condition: () -> Boolean): TaskBuilder {
             mJob = job
             mCondition = condition
+            return this
+        }
+
+        // 是否需要在主线程运，默认为false
+        fun needMainThread(needMainThread: Boolean): TaskBuilder {
+            mNeedOnMainThread = needMainThread
             return this
         }
 
