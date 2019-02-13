@@ -1,55 +1,101 @@
 package me.jiahuan.android.init
 
-import android.os.SystemClock
+import android.os.Looper
 import android.util.Log
 import java.util.*
-import java.util.concurrent.Callable
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicInteger
 
-// 流程，一般一个进程对应一个流程
-// 一个flow拥有多个stage
-class Flow {
+class Flow : TaskCallback {
     companion object {
         private const val TAG = "Flow"
+        // 统一线程池
+        private val sThreadPool: ExecutorService = Executors.newCachedThreadPool()
     }
 
-    // stages
-    private val mStageMap = TreeMap<Int, Stage>()
+    // 任务map
+    val taskMap = HashMap<String, Task>()
+
+    // 起始任务列表
+    private val startTaskMap = ArrayList<Task>()
+
+    // 依赖任务map
+    private val dependTaskNameMap = HashMap<String, List<String>>()
+
+    // 主线程运行任务
+    private val mainThreadRunnable = LinkedList<() -> Unit>()
+
+    // 任务完成
+    var doneTaskCountDown = AtomicInteger()
+
 
     fun addTask(task: Task): Flow {
-        val beginStageId = task.beginStageId
-        var beginStage = mStageMap[beginStageId]
-        if (beginStage == null) {
-            beginStage = Stage(beginStageId)
-            mStageMap[beginStageId] = beginStage
+        // 设置task所属
+        task.setOwner(this)
+        task.addTaskCallback(this)
+        taskMap[task.name] = task
+        if (task.dependTasks.isEmpty()) {
+            startTaskMap.add(task)
+        } else {
+            dependTaskNameMap[task.name] = task.dependTasks
         }
-        beginStage.addBeginTask(task)
-        Log.d(TAG, "add task begin stage id = $beginStageId")
-
-        val endStageId = task.endStageId
-        var endStage = mStageMap[endStageId]
-        if (endStage == null) {
-            endStage = Stage(endStageId)
-            mStageMap[endStageId] = endStage
-        }
-        endStage.addEndTask(task)
-        Log.d(TAG, "add task end stage id = $endStageId")
         return this
     }
 
+    // 开始流程
     internal fun start() {
-        Log.d(TAG, "flow start")
-        val startTime = SystemClock.elapsedRealtime()
-        val flowTask = object : Callable<Boolean> {
-            override fun call(): Boolean {
-                for ((_, stage) in mStageMap) {
-                    stage.start()
+        val startTaskNameSB = StringBuffer()
+        for (startTask in startTaskMap) {
+            startTaskNameSB.append("${startTask.name} ")
+        }
+        Log.d(TAG, "起始任务为 $startTaskNameSB")
+
+        doneTaskCountDown.set(taskMap.size)
+        for ((key, value) in dependTaskNameMap) {
+            val sb = StringBuffer()
+            val task = taskMap[key] ?: continue
+            for (dependTaskName in value) {
+                taskMap[dependTaskName]?.addTaskCallback(task)
+                sb.append("$dependTaskName ")
+            }
+            Log.d(TAG, "$key 依赖 $sb")
+        }
+        for (task in startTaskMap) {
+            schedule(task)
+        }
+    }
+
+    internal fun schedule(task: Task) {
+        if (task.thread == Schedulers.MAIN) {
+            Log.d(TAG, "schedule ${task.name} 主线程运行")
+            if (Looper.getMainLooper().thread == Thread.currentThread()) {
+                task.run()
+            } else {
+                mainThreadRunnable.add { task.run() }
+            }
+        } else {
+            Log.d(TAG, "schedule ${task.name} 线程池运行")
+            if (Looper.getMainLooper().thread != Thread.currentThread()) {
+                task.run()
+            } else {
+                sThreadPool.execute {
+                    task.run()
                 }
-                return true
             }
         }
-
-        val initTask = Init.getInstance().getThreadPool().submit(flowTask)
-        initTask.get()
-        Log.d(TAG, "flow end cost time = ${SystemClock.elapsedRealtime() - startTime} ms")
     }
+
+    internal fun scheduleOnMainThread() {
+        if (mainThreadRunnable.size > 0) {
+            Log.d(TAG, "scheduleOnMainThread")
+            mainThreadRunnable.first.invoke()
+            mainThreadRunnable.removeFirst()
+        }
+    }
+
+    override fun onTaskEnd(taskName: String) {
+        doneTaskCountDown.decrementAndGet()
+    }
+
 }

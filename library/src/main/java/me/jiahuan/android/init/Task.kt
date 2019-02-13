@@ -6,12 +6,10 @@ import java.util.concurrent.atomic.AtomicInteger
 // 任务
 class Task private constructor(
     val name: String,
-    val async: Boolean,
-    val beginStageId: Int,
-    val endStageId: Int,
-    val job: () -> Unit,
-    val condition: () -> Boolean
-) : Runnable {
+    val thread: Int,
+    val dependTasks: ArrayList<String>,
+    val job: () -> Unit
+) : TaskCallback {
 
     companion object {
         private const val TAG = "Task"
@@ -23,85 +21,94 @@ class Task private constructor(
         const val STATUS_END = 2
     }
 
+
+    // 属于哪个flow
+    private var owner: Flow? = null
+
     // 当前task状态
-    private var mCurrentStatus = AtomicInteger(STATUS_READY)
+    private var currentStatus = AtomicInteger(STATUS_READY)
 
     // task call back
-    private var mTaskCallback: TaskCallback? = null
+    private val taskCallbackList = ArrayList<TaskCallback>()
+
+
+    // 设置owner
+    internal fun setOwner(flow: Flow) {
+        owner = flow
+    }
+
 
     // 执行任务
-    override fun run() {
-        Log.d(TAG, "$name task start")
-        mCurrentStatus.set(STATUS_RUNNING)
-        if (condition.invoke()) {
-            Log.d(TAG, "$name task doing")
-            job.invoke()
-        } else {
-            Log.d(TAG, "$name task not meet the condition")
-        }
-        mCurrentStatus.set(STATUS_END)
+    internal fun run() {
+        Log.d(TAG, "$name task start in ${Thread.currentThread().name}")
+        currentStatus.set(STATUS_RUNNING)
+        job.invoke()
+        currentStatus.set(STATUS_END)
         Log.d(TAG, "$name task end")
-        mTaskCallback?.onEnd()
+        notifyTaskCallback()
     }
 
-    fun addTaskCallback(taskCallback: TaskCallback) {
-        mTaskCallback = taskCallback
-        if (mCurrentStatus.get() == STATUS_END) {
-            mTaskCallback?.onEnd()
+    private fun notifyTaskCallback() {
+        for (taskCallback in taskCallbackList) {
+            taskCallback.onTaskEnd(name)
         }
     }
 
-    interface TaskCallback {
-        fun onEnd()
+
+    internal fun addTaskCallback(taskCallback: TaskCallback) {
+        taskCallbackList.add(taskCallback)
+    }
+
+    override fun onTaskEnd(taskName: String) {
+        this.owner?.let {
+            Log.d(TAG, "$name 检查前序任务是否执行完成")
+            var ready = true
+            for (taskName in dependTasks) {
+                val task = it.taskMap[taskName]
+                if (task == null || task.currentStatus.get() != STATUS_END) {
+                    ready = false
+                }
+            }
+            if (ready) {
+                Log.d(TAG, "$name 前序任务执行完成")
+                it.schedule(this)
+            }
+        }
     }
 
     class TaskBuilder {
-        private var mBeginStageId = Stage.STAGE_FIRST_ID
-        private var mEndStageId = Stage.STAGE_LAST_ID
-        private var mAsync = true // 默认同步
-        private var mTaskName: String = ""
-        private var mJob: () -> Unit = {}
-        private var mCondition: () -> Boolean = { false }
-        private var mNeedOnMainThread = false
+        private var taskName: String = ""
+        private var job: () -> Unit = {}
+        private var thread = Schedulers.MAIN
+        private var dependTaskList = ArrayList<String>()
 
+        // task 名字，保证唯一性
         fun name(name: String): TaskBuilder {
-            mTaskName = name
-            return this
-        }
-
-        //  起始阶段
-        fun beginStage(stageId: Int): TaskBuilder {
-            mBeginStageId = stageId
-            return this
-        }
-
-        // 结束阶段
-        fun endStage(stageId: Int): TaskBuilder {
-            mEndStageId = stageId
-            return this
-        }
-
-        // 设置同步异步，默认同步true
-        fun async(async: Boolean): TaskBuilder {
-            mAsync = async
+            this.taskName = name
             return this
         }
 
         // 设置工作内容
-        fun job(job: () -> Unit, condition: () -> Boolean): TaskBuilder {
-            mJob = job
-            mCondition = condition
+        fun job(job: () -> Unit): TaskBuilder {
+            this.job = job
             return this
         }
 
-        // 是否需要在主线程运，默认为false
-        fun needMainThread(needMainThread: Boolean): TaskBuilder {
-            mNeedOnMainThread = needMainThread
+        // 设置工作线程
+        fun schedule(thread: Int): TaskBuilder {
+            this.thread = thread
             return this
         }
 
+        // 设置依赖
+        fun dependsOn(vararg tasks: String): TaskBuilder {
+            this.dependTaskList.addAll(tasks.asList())
+            return this
+        }
+
+        // 构建
         fun build(): Task {
-            return Task(mTaskName, mAsync, mBeginStageId, mEndStageId, mJob, mCondition)
+            return Task(this.taskName, this.thread, this.dependTaskList, this.job)
         }
     }
 }
