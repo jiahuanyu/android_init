@@ -6,6 +6,7 @@ import java.util.concurrent.atomic.AtomicInteger
 // 任务
 class Task private constructor(
     val name: String,
+    val process: Int,
     val thread: Int,
     val dependTasks: ArrayList<String>,
     val job: () -> Unit
@@ -43,6 +44,13 @@ class Task private constructor(
         Log.d(TAG, "$name task start in ${Thread.currentThread().name}")
         currentStatus.set(STATUS_RUNNING)
         job.invoke()
+        tagTaskEnd()
+    }
+
+    /**
+     * 标记任务结束
+     */
+    internal fun tagTaskEnd() {
         currentStatus.set(STATUS_END)
         Log.d(TAG, "$name task end")
         notifyTaskCallback()
@@ -80,6 +88,7 @@ class Task private constructor(
         private var taskName: String = ""
         private var job: () -> Unit = {}
         private var thread = Schedulers.MAIN
+        private var process = Process.ALL
         private var dependTaskList = ArrayList<String>()
 
         // task 名字，保证唯一性
@@ -100,6 +109,12 @@ class Task private constructor(
             return this
         }
 
+        // 设置允许工作的进程
+        fun process(process: Int): TaskBuilder {
+            this.process = process
+            return this
+        }
+
         // 设置依赖
         fun dependsOn(vararg tasks: String): TaskBuilder {
             this.dependTaskList.addAll(tasks.asList())
@@ -108,7 +123,7 @@ class Task private constructor(
 
         // 构建
         fun build(): Task {
-            return Task(this.taskName, this.thread, this.dependTaskList, this.job)
+            return Task(this.taskName, this.process, this.thread, this.dependTaskList, this.job)
         }
     }
 }

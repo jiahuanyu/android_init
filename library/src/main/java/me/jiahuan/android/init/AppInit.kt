@@ -24,12 +24,12 @@ class AppInit private constructor() {
     }
 
     // 初始化
-    fun initialize(flow: Flow) {
+    fun initialize(flow: Flow, isMainProcess: Boolean) {
         val startTime = SystemClock.elapsedRealtime() // 记录起始时间
-        flow.start()
+        flow.start(isMainProcess)
         while (flow.doneTaskCountDown.get() != 0) {
             flow.scheduleOnMainThread()
         }
-        Log.d(TAG, "初始化任务花费 ${SystemClock.elapsedRealtime() - startTime} ms")
+        Log.d(TAG, "isMainProcess = $isMainProcess, 初始化任务花费 ${SystemClock.elapsedRealtime() - startTime} ms")
     }
 }

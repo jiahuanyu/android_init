@@ -5,6 +5,7 @@ import android.app.Application
 import android.content.Context
 import me.jiahuan.android.init.AppInit
 import me.jiahuan.android.init.Flow
+import me.jiahuan.android.init.Process
 import me.jiahuan.android.init.Schedulers
 import me.jiahuan.android.init.Task
 
@@ -33,12 +34,18 @@ class App : Application() {
             .addTask(Task.TaskBuilder().name("task5").schedule(Schedulers.NEW_THREAD).dependsOn().job {
                 Thread.sleep(500)
             }.build())
-            .addTask(Task.TaskBuilder().name("task0").schedule(Schedulers.MAIN).dependsOn("task1", "task2", "task3").job {
-                Thread.sleep(1000)
-            }.build())
+            .addTask(
+                Task.TaskBuilder().name("task0").schedule(Schedulers.MAIN).dependsOn(
+                    "task1",
+                    "task2",
+                    "task3"
+                ).process(Process.MAIN).job {
+                    Thread.sleep(1000)
+                }.build()
+            )
 
 
-        AppInit.getInstance().initialize(flow)
+        AppInit.getInstance().initialize(flow, getCurrentProcessName(this) == "me.jiahuan.android.init")
     }
 
     fun getCurrentProcessName(context: Context): String {

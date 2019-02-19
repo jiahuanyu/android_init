@@ -29,6 +29,9 @@ class Flow : TaskCallback {
     // 任务完成
     var doneTaskCountDown = AtomicInteger()
 
+    // 当前是否为主进程
+    var isMainProcess = false
+
 
     fun addTask(task: Task): Flow {
         // 设置task所属
@@ -44,7 +47,8 @@ class Flow : TaskCallback {
     }
 
     // 开始流程
-    internal fun start() {
+    internal fun start(isMainProcess: Boolean) {
+        this.isMainProcess = isMainProcess
         val startTaskNameSB = StringBuffer()
         for (startTask in startTaskMap) {
             startTaskNameSB.append("${startTask.name} ")
@@ -67,6 +71,10 @@ class Flow : TaskCallback {
     }
 
     internal fun schedule(task: Task) {
+        if ((task.process == Process.MAIN && !isMainProcess) || (task.process == Process.OTHER && isMainProcess)) {
+            task.tagTaskEnd()
+            return
+        }
         if (task.thread == Schedulers.MAIN) {
             Log.d(TAG, "schedule ${task.name} 主线程运行")
             if (Looper.getMainLooper().thread == Thread.currentThread()) {
