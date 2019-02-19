@@ -3,11 +3,7 @@ package me.jiahuan.android.init.test
 import android.app.ActivityManager
 import android.app.Application
 import android.content.Context
-import me.jiahuan.android.init.AppInit
-import me.jiahuan.android.init.Flow
-import me.jiahuan.android.init.Process
-import me.jiahuan.android.init.Schedulers
-import me.jiahuan.android.init.Task
+import me.jiahuan.android.init.*
 
 
 class App : Application() {
@@ -41,7 +37,7 @@ class App : Application() {
                     "task3"
                 ).process(Process.MAIN).job {
                     Thread.sleep(1000)
-                }.build()
+                }.innerOnCreate(false).build()
             )
 
 

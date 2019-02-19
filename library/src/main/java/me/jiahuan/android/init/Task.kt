@@ -8,6 +8,7 @@ class Task private constructor(
     val name: String,
     val process: Int,
     val thread: Int,
+    val innerOnCreate: Boolean,
     val dependTasks: ArrayList<String>,
     val job: () -> Unit
 ) : TaskCallback {
@@ -90,6 +91,7 @@ class Task private constructor(
         private var thread = Schedulers.MAIN
         private var process = Process.ALL
         private var dependTaskList = ArrayList<String>()
+        private var innerOnCreate = true
 
         // task 名字，保证唯一性
         fun name(name: String): TaskBuilder {
@@ -121,9 +123,15 @@ class Task private constructor(
             return this
         }
 
+        // 是否需要在application oncreate之内完成
+        fun innerOnCreate(inner: Boolean): TaskBuilder {
+            innerOnCreate = inner
+            return this
+        }
+
         // 构建
         fun build(): Task {
-            return Task(this.taskName, this.process, this.thread, this.dependTaskList, this.job)
+            return Task(this.taskName, this.process, this.thread, this.innerOnCreate, this.dependTaskList, this.job)
         }
     }
 }

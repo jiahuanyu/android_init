@@ -55,7 +55,7 @@ class Flow : TaskCallback {
         }
         Log.d(TAG, "起始任务为 $startTaskNameSB")
 
-        doneTaskCountDown.set(taskMap.size)
+        doneTaskCountDown.set(taskMap.filter { it.value.innerOnCreate }.size)
         for ((key, value) in dependTaskNameMap) {
             val sb = StringBuffer()
             val task = taskMap[key] ?: continue
